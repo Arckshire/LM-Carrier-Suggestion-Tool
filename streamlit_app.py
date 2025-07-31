@@ -26,13 +26,13 @@ metric_options = [
     ("Out for Delivery Milestone Completeness", "higher"),
     ("In Transit Milestone Completeness", "higher"),
     ("Delivered Milestone Completeness", "higher"),
-    ("Latency under 1 hr", "higher"),  # if % under 1hr; change to "lower" if it's duration
-    ("Latency under 2 hr", "higher"),
-    ("Latency bw 1-3 hrs", "higher"),
-    ("Latency bw 3-8 hrs", "higher"),
-    ("Latency bw 8-24hrs", "higher"),
-    ("Latency bw 24-72hrs", "higher"),
-    ("Latency over 72hrs", "higher"),
+    ("Latency under 1 hr", "lower"),  # if % under 1hr; change to "lower" if it's duration
+    ("Latency under 2 hr", "lower"),
+    ("Latency bw 1-3 hrs", "lower"),
+    ("Latency bw 3-8 hrs", "lower"),
+    ("Latency bw 8-24hrs", "lower"),
+    ("Latency bw 24-72hrs", "lower"),
+    ("Latency over 72hrs", "lower"),
     ("Avg Latency Mins", "lower"),  # lower is better
 ]
 
