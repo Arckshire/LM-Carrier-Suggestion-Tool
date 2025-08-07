@@ -26,14 +26,14 @@ metric_options = [
     ("Out for Delivery Milestone Completeness", "higher"),
     ("In Transit Milestone Completeness", "higher"),
     ("Delivered Milestone Completeness", "higher"),
-    ("Latency under 1 hr", "lower"),  # if % under 1hr; change to "lower" if it's duration
+    ("Latency under 1 hr", "lower"),
     ("Latency under 2 hr", "lower"),
     ("Latency bw 1-3 hrs", "lower"),
     ("Latency bw 3-8 hrs", "lower"),
     ("Latency bw 8-24hrs", "lower"),
     ("Latency bw 24-72hrs", "lower"),
     ("Latency over 72hrs", "lower"),
-    ("Avg Latency Mins", "lower"),  # lower is better
+    ("Avg Latency Mins", "lower"),
 ]
 
 metric_labels = [f"{i+1}. {name} ({direction})" for i, (name, direction) in enumerate(metric_options)]
@@ -81,37 +81,52 @@ def prep(df):
     return df
 
 def make_output(master_df, customer_df, metrics, suggestion_count):
-    # lower/ higher logic from metrics tuple list
     unused = master_df[~master_df["Carrier Name"].str.lower().isin(customer_df["Carrier Name"].str.lower())].copy()
-
     suggested = []
+
     for _, sugg in unused.iterrows():
         passes = True
         carrier_to_metrics = {}
+
         for col, direction in metrics:
             if col not in customer_df.columns or pd.isna(sugg[col]):
                 passes = False
                 break
+
             cust_vals = customer_df[col]
             sugg_val = sugg[col]
+
             if direction == "higher":
                 mask = sugg_val >= cust_vals
             else:
                 mask = sugg_val <= cust_vals
+
             if mask.any():
-                # for each customer carrier that it's better than on this metric
                 for ci in customer_df[mask].index:
                     cust_name = customer_df.loc[ci, "Carrier Name"]
-                    carrier_to_metrics.setdefault(cust_name, []).append(col)
+                    cust_val = customer_df.loc[ci, col]
+
+                    if pd.isna(cust_val) or pd.isna(sugg_val):
+                        continue
+
+                    if abs(sugg_val - cust_val) < 1e-6:
+                        tag = "(E)"
+                    else:
+                        is_better = (sugg_val > cust_val) if direction == "higher" else (sugg_val < cust_val)
+                        tag = "(B)" if is_better else "(E)"  # fallback to (E)
+
+                    metric_label = f"{col} {tag}"
+                    carrier_to_metrics.setdefault(cust_name, []).append(metric_label)
             else:
                 passes = False
                 break
+
         if passes and carrier_to_metrics:
             row = sugg.to_dict()
             i = 1
-            for cust_carrier, cols in carrier_to_metrics.items():
+            for cust_carrier, labeled_metrics in carrier_to_metrics.items():
                 row[f"Carrier {i}"] = cust_carrier.title()
-                row[f"Reason {i}"] = ", ".join(cols)
+                row[f"Reason {i}"] = ", ".join(labeled_metrics)
                 i += 1
             suggested.append(row)
 
@@ -121,7 +136,6 @@ def make_output(master_df, customer_df, metrics, suggestion_count):
     df = pd.DataFrame(suggested)
     df = df.head(suggestion_count)
     df.insert(0, "SL No", range(1, len(df)+1))
-    # Title-case any carrier columns
     for col in df.columns:
         if col.lower().startswith("carrier"):
             df[col] = df[col].astype(str).str.title()
@@ -144,7 +158,7 @@ if master_file and customer_file and selected_metrics:
         legend_rows = [
             ["Column", "Explanation"],
             ["Carrier N", "Customer carrier that this suggestion outperformed on one or more metrics"],
-            ["Reason N", "Metrics (in order) where the suggested carrier outperformed that customer carrier; abbreviations: DA=Data Availability, MC=Milestone Completeness, L=Avg Latency Mins"]
+            ["Reason N", "Metrics (in order) where the suggested carrier outperformed that customer carrier. (B)=Better, (E)=Equal"]
         ]
         legend_df = pd.DataFrame(legend_rows[1:], columns=legend_rows[0])
         st.subheader("Legend")
@@ -161,7 +175,6 @@ if master_file and customer_file and selected_metrics:
 
         if st.button("Download Suggestions"):
             if not output_df.empty:
-                from io import BytesIO
                 data = to_excel_bytes(output_df)
                 st.download_button(
                     "Click to download Excel",
